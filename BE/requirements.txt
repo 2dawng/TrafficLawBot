@@ -3,6 +3,6 @@ uvicorn
 python-dotenv
 httpx
 sqlalchemy[asyncio]
-asyncpg
+aiomysql
 pyjwt
 groq

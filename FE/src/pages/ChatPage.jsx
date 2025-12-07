@@ -19,6 +19,7 @@ import {
   Plus,
 } from "lucide-react";
 import AvatarBubble from "../components/ui/AvatarBubble";
+import api from "../lib/api";
 
 export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -28,7 +29,8 @@ export default function ChatPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]); // {from:'user'|'bot', text:string}
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState([]);
+  const [sessions, setSessions] = useState([]); // list of sessions
+  const [currentSessionId, setCurrentSessionId] = useState(null); // active session
 
   const userAvatar = localStorage.getItem("user_avatar");
   const hasChat = messages.length > 0;
@@ -55,9 +57,20 @@ export default function ChatPage() {
     }
   };
 
-  const handleResetChat = () => {
-    setMessages([]);
-    setMessage("");
+  const handleResetChat = async () => {
+    // Create a new session
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+
+    try {
+      const newSession = await api.post("http://localhost:8000/chat/session");
+      setCurrentSessionId(newSession.session_id);
+      setSessions((prev) => [newSession, ...prev]);
+      setMessages([]);
+      setMessage("");
+    } catch (err) {
+      console.error("Error creating session:", err);
+    }
   };
 
   useEffect(() => {
@@ -67,30 +80,45 @@ export default function ChatPage() {
       window.location.href = "/";
     }
 
-    // gọi API lấy lịch sử
-    const fetchHistory = async () => {
+    // Fetch list of sessions
+    const fetchSessions = async () => {
       try {
-        const res = await fetch("http://localhost:8000/chat/history", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const data = await api.get("http://localhost:8000/chat/sessions");
+        setSessions(data);
 
-        if (!res.ok) {
-          console.error("Lỗi lấy history:", await res.text());
-          return;
+        // Auto-select the most recent session if available
+        if (data.length > 0) {
+          setCurrentSessionId(data[0].session_id);
+          loadSessionHistory(data[0].session_id, token);
         }
-
-        const data = await res.json();
-        // data từ BE: [{ message, response, timestamp }]
-        setHistory(data);
       } catch (err) {
-        console.error("Lỗi fetch history:", err);
+        console.error("Error fetching sessions:", err);
       }
     };
 
-    fetchHistory();
+    fetchSessions();
   }, []);
+
+  const loadSessionHistory = async (sessionId, token) => {
+    if (!sessionId) return;
+
+    try {
+      const data = await api.get(
+        `http://localhost:8000/chat/history?session_id=${sessionId}`
+      );
+
+      // Convert history to messages format
+      const msgs = [];
+      data.reverse().forEach((item) => {
+        msgs.push({ from: "user", text: item.message });
+        msgs.push({ from: "bot", text: item.response });
+      });
+
+      setMessages(msgs);
+    } catch (err) {
+      console.error("Error loading session history:", err);
+    }
+  };
 
   const features = [
     {
@@ -172,6 +200,13 @@ export default function ChatPage() {
     const trimmed = text.trim();
     if (!trimmed) return;
 
+    // If no session exists, create one first
+    if (!currentSessionId) {
+      await handleResetChat();
+      // Wait a bit for the session to be created
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
     // clear ô input
     setMessage("");
     if (textareaRef.current) {
@@ -184,35 +219,12 @@ export default function ChatPage() {
     try {
       setLoading(true);
 
-      const res = await fetch("http://localhost:8000/chat/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ message: trimmed }),
+      const reply = await api.post("http://localhost:8000/chat/", {
+        message: trimmed,
+        session_id: currentSessionId
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        console.error("Lỗi từ backend:", err);
-        alert("Gọi API chat lỗi. Kiểm tra console.");
-        return;
-      }
-
-      const reply = await res.text();
-
       setMessages((prev) => [...prev, { from: "bot", text: reply }]);
-
-      // thêm record mới vào history để hiện bên trái
-      setHistory((prev) => [
-        {
-          message: trimmed,
-          response: reply,
-          timestamp: new Date().toISOString(),
-        },
-        ...prev, // mới nhất nằm trên cùng
-      ]);
     } catch (error) {
       console.error("Lỗi khi gọi API:", error);
       alert("Không gọi được backend. Kiểm tra lại server.");
@@ -236,11 +248,9 @@ export default function ChatPage() {
         <div className="flex h-full gap-3 px-4 py-4">
           {/* Sidebar */}
           <aside
-            className={`${
-              sidebarOpen ? "w-80" : "w-0 lg:w-20"
-            } transition-all duration-300 bg-white/5 backdrop-blur-xl overflow-hidden flex flex-col rounded-4xl overflow-y-scroll ${
-              isLoaded ? "animate-slide-left" : "opacity-0"
-            }`}
+            className={`${sidebarOpen ? "w-80" : "w-0 lg:w-20"
+              } transition-all duration-300 bg-white/5 backdrop-blur-xl overflow-hidden flex flex-col rounded-4xl overflow-y-scroll ${isLoaded ? "animate-slide-left" : "opacity-0"
+              }`}
           >
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
@@ -300,26 +310,29 @@ export default function ChatPage() {
               <div className="flex-1 flex flex-col border-t border-b border-gray-200 min-h-0">
                 <div className="p-4 shrink-0 flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-gray-700">
-                    Cuộc trò chuyện gần đây
+                    Các phiên chat
                   </h3>
                 </div>
                 <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
-                  {history.map((chat, idx) => (
+                  {sessions.map((session, idx) => (
                     <button
                       key={idx}
-                      className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 transition-all text-left cursor-pointer"
+                      className={`w-full flex items-center gap-3 p-2 rounded-lg transition-all text-left cursor-pointer ${currentSessionId === session.session_id
+                        ? "bg-blue-100 border border-blue-300"
+                        : "hover:bg-gray-100"
+                        }`}
                       onClick={() => {
-                        // nếu sau này bạn muốn click để load lại đoạn chat đó thì xử lý ở đây
-                        // tạm thời mình chỉ console.log
-                        console.log("Clicked history item:", chat);
+                        setCurrentSessionId(session.session_id);
+                        const token = localStorage.getItem("access_token");
+                        loadSessionHistory(session.session_id, token);
                       }}
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">
-                          {chat.message}
+                          Phiên chat #{session.session_id}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {formatTime(chat.timestamp)}
+                          {formatTime(session.created_at)}
                         </p>
                       </div>
                     </button>
@@ -348,9 +361,8 @@ export default function ChatPage() {
 
           {/* Main Content */}
           <main
-            className={`relative flex-1 flex flex-col main-chat rounded-4xl items-center justify-center bg-white/5 backdrop-blur-xl px-4 py-4 ${
-              isLoaded ? "animate-slide-right" : "opacity-0"
-            }`}
+            className={`relative flex-1 flex flex-col main-chat rounded-4xl items-center justify-center bg-white/5 backdrop-blur-xl px-4 py-4 ${isLoaded ? "animate-slide-right" : "opacity-0"
+              }`}
           >
             <div className="chatArea flex-1 flex flex-col h-full">
               {/* HEADER – chỉ hiện nếu chưa chat */}
@@ -404,9 +416,8 @@ export default function ChatPage() {
                       {messages.map((m, idx) => (
                         <div
                           key={idx}
-                          className={`flex items-end gap-1 relative ${
-                            m.from === "user" ? "justify-end" : "justify-start"
-                          }`}
+                          className={`flex items-end gap-1 relative ${m.from === "user" ? "justify-end" : "justify-start"
+                            }`}
                         >
                           {/* Avatar chatbot (chỉ hiện khi KHÔNG phải user) */}
                           {m.from !== "user" && (
@@ -419,11 +430,10 @@ export default function ChatPage() {
                             </div>
                           )}
                           <div
-                            className={`px-4 py-2 rounded-2xl max-w-[80%] whitespace-pre-wrap text-sm wrap-break-word bubble-pop ${
-                              m.from === "user"
-                                ? "bg-[#FF9E8C] text-black rounded-br-none"
-                                : "bg-[#FFF7FB] text-gray-800 rounded-bl-none shadow-[0_2px_5px_-1px_rgba(50,50,93,0.25)] shadow-[0_1px_3px_-1px_rgba(0,0,0,0.3)]"
-                            }`}
+                            className={`px-4 py-2 rounded-2xl max-w-[80%] whitespace-pre-wrap text-sm wrap-break-word bubble-pop ${m.from === "user"
+                              ? "bg-[#FF9E8C] text-black rounded-br-none"
+                              : "bg-[#FFF7FB] text-gray-800 rounded-bl-none shadow-[0_2px_5px_-1px_rgba(50,50,93,0.25)] shadow-[0_1px_3px_-1px_rgba(0,0,0,0.3)]"
+                              }`}
                           >
                             {m.text}
                           </div>
