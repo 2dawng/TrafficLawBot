@@ -11,6 +11,7 @@ from models import ChatHistory, Session
 from sqlalchemy import select, desc
 
 from groq import Groq  # 🟢 GROQ API
+from qdrant_search import search_traffic_laws, format_context_for_llm
 
 router = APIRouter(prefix="/chat")
 
@@ -121,12 +122,29 @@ async def chat(
         logger.warning("No session_id provided - chat will have no context")
 
     # ================================================
+    # 🔥 RAG: SEARCH QDRANT FOR RELEVANT DOCUMENTS
+    # ================================================
+    logger.info("Searching Qdrant for relevant traffic law documents...")
+    search_results = search_traffic_laws(message, limit=5)
+    context = format_context_for_llm(search_results)
+
+    if context:
+        logger.info(
+            f"Found {len(search_results)} relevant documents, context length: {len(context)}"
+        )
+    else:
+        logger.warning("No relevant documents found in Qdrant")
+
+    # ================================================
     # 🔥 STREAM GROQ
     # ================================================
     async def chat_stream_generator():
         system_prompt = (
-            "Bạn là chatbot luật giao thông Việt Nam, cập nhật đến đầu 2026. "
+            "Bạn là chatbot luật giao thông Việt Nam, cập nhật đến cuối năm 2025. "
             "Chỉ trả lời chính xác câu hỏi theo luật hiện hành, không suy đoán. "
+            "QUAN TRỌNG: Khi có nhiều văn bản về cùng một vấn đề, LUÔN ƯU TIÊN VĂN BẢN MỚI NHẤT (năm cao hơn). "
+            "Văn bản mới sẽ thay thế hoặc sửa đổi văn bản cũ. Hãy nêu rõ năm ban hành trong câu trả lời. "
+            "CHỈ SỬ DỤNG TIẾNG VIỆT, KHÔNG dùng tiếng Trung, tiếng Anh hay ngôn ngữ khác trong câu trả lời."
         )
 
         max_retries = 3
@@ -137,6 +155,11 @@ async def chat(
                 # Build messages with session history
                 messages = [{"role": "system", "content": system_prompt}]
                 messages.extend(chat_history)
+
+                # Add context from Qdrant if available
+                if context:
+                    messages.append({"role": "system", "content": context})
+
                 messages.append({"role": "user", "content": message})
 
                 response_stream = client.chat.completions.create(

@@ -6,3 +6,6 @@ sqlalchemy[asyncio]
 aiomysql
 pyjwt
 groq
+qdrant-client
+sentence-transformers
+torch
