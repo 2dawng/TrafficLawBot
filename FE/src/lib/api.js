@@ -1,6 +1,8 @@
 // API helper with automatic token refresh
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+console.log("API_BASE_URL:", API_BASE_URL);
 
 let isRefreshing = false;
 let failedQueue = [];
@@ -111,7 +113,8 @@ const apiRequest = async (url, options = {}) => {
 // Export helper methods
 export const api = {
     get: async (url, options = {}) => {
-        const response = await apiRequest(url, { ...options, method: "GET" });
+        const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+        const response = await apiRequest(fullUrl, { ...options, method: "GET" });
         const contentType = response.headers.get("content-type");
         if (contentType && contentType.includes("application/json")) {
             return response.json();
@@ -120,7 +123,8 @@ export const api = {
     },
 
     post: async (url, data, options = {}) => {
-        const response = await apiRequest(url, {
+        const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+        const response = await apiRequest(fullUrl, {
             ...options,
             method: "POST",
             headers: {
@@ -137,7 +141,8 @@ export const api = {
     },
 
     put: async (url, data, options = {}) => {
-        const response = await apiRequest(url, {
+        const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+        const response = await apiRequest(fullUrl, {
             ...options,
             method: "PUT",
             headers: {
@@ -154,7 +159,8 @@ export const api = {
     },
 
     delete: async (url, options = {}) => {
-        const response = await apiRequest(url, { ...options, method: "DELETE" });
+        const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+        const response = await apiRequest(fullUrl, { ...options, method: "DELETE" });
         const contentType = response.headers.get("content-type");
         if (contentType && contentType.includes("application/json")) {
             return response.json();

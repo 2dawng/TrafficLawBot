@@ -63,7 +63,7 @@ export default function ChatPage() {
     if (!token) return;
 
     try {
-      const newSession = await api.post("http://localhost:8000/chat/session");
+      const newSession = await api.post("/chat/session");
       setCurrentSessionId(newSession.session_id);
       setSessions((prev) => [newSession, ...prev]);
       setMessages([]);
@@ -83,7 +83,7 @@ export default function ChatPage() {
     // Fetch list of sessions
     const fetchSessions = async () => {
       try {
-        const data = await api.get("http://localhost:8000/chat/sessions");
+        const data = await api.get("/chat/sessions");
         setSessions(data);
 
         // Auto-select the most recent session if available
@@ -104,7 +104,7 @@ export default function ChatPage() {
 
     try {
       const data = await api.get(
-        `http://localhost:8000/chat/history?session_id=${sessionId}`
+        `/chat/history?session_id=${sessionId}`
       );
 
       // Convert history to messages format
@@ -219,7 +219,7 @@ export default function ChatPage() {
     try {
       setLoading(true);
 
-      const reply = await api.post("http://localhost:8000/chat/", {
+      const reply = await api.post("/chat/", {
         message: trimmed,
         session_id: currentSessionId
       });

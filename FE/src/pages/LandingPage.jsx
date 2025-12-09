@@ -14,9 +14,8 @@ export default function LandingPage() {
     <>
       <div className="wrapper flex flex-col h-full gap-10 px-10 py-5">
         <header
-          className={`glass-nav sticky top-0 z-50 backdrop-blur-lg gradient shadow-sm mt-2 rounded-full ${
-            isLoaded ? "animate-slide-down" : "opacity-0"
-          }`}
+          className={`glass-nav sticky top-0 z-50 backdrop-blur-lg gradient shadow-sm mt-2 rounded-full ${isLoaded ? "animate-slide-down" : "opacity-0"
+            }`}
         >
           <div className="flex justify-between items-center px-6 py-4 md:px-10">
             <div className="flex items-center gap-3 font-black text-xl">
@@ -42,9 +41,8 @@ export default function LandingPage() {
         <main className="flex flex-row lg:flex-row items-center justify-center gap-10 max-w-full mx-auto h-full w-full rounded-4xl">
           {/* Map Section */}
           <div
-            className={`map-section w-full flex flex-col gap-10 h-full flex-6 ${
-              isLoaded ? "animate-slide-left" : "opacity-0"
-            }`}
+            className={`map-section w-full flex flex-col gap-10 h-full flex-6 ${isLoaded ? "animate-slide-left" : "opacity-0"
+              }`}
           >
             <div className="relative w-full h-60 min-h-100 rounded-4xl overflow-hidden shadow-2xl flex-1">
               <img
@@ -114,9 +112,8 @@ export default function LandingPage() {
 
           {/* Auth Section */}
           <div
-            className={`flex-4 auth-section w-full flex flex-col items-center h-full justify-center rounded-4xl ${
-              isLoaded ? "animate-slide-right" : "opacity-0"
-            }`}
+            className={`flex-4 auth-section w-full flex flex-col items-center h-full justify-center rounded-4xl ${isLoaded ? "animate-slide-right" : "opacity-0"
+              }`}
           >
             <div className="flex items-center gap-4 mb-6 relative">
               <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-xl animate-float absolute left-[-100px]">
@@ -140,7 +137,8 @@ export default function LandingPage() {
 
               <button
                 onClick={() => {
-                  window.location.href = "http://localhost:8000/auth/login";
+                  const apiUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+                  window.location.href = `${apiUrl}/auth/login`;
                 }}
                 className="cursor-pointer w-full flex items-center justify-center gap-3 py-3.5 
                    border border-gray-300 rounded-full font-semibold bg-white

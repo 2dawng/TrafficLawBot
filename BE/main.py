@@ -37,17 +37,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # cho phép FE gọi
+    allow_origin_regex=r"https://.*\.devtunnels\.ms|http://localhost:5173|http://127\.0\.0\.1:5173",
     allow_credentials=True,
     allow_methods=["*"],  # GET, POST, OPTIONS,...
     allow_headers=["*"],  # cho phép Authorization, Content-Type,...
+    expose_headers=["*"],  # expose all headers
 )
 
 app.include_router(auth_router)
