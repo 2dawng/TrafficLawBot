@@ -1,0 +1,18 @@
+# Requirements for Qdrant Embedding
+# Install with: pip install -r requirements_qdrant.txt
+
+# Qdrant client
+qdrant-client>=1.7.0
+
+# Embedding models
+sentence-transformers>=2.2.0
+
+# PyTorch (CPU version - for embeddings)
+torch>=2.0.0
+
+# Optional: For building API
+fastapi>=0.104.0
+uvicorn>=0.24.0
+
+# Optional: For better Vietnamese text processing
+underthesea>=6.7.0
