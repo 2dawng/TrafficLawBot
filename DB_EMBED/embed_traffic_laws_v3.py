@@ -1,4 +1,4 @@
-"""Embed ONLY traffic law documents (filtered by URL) - Using working pattern"""
+"""Embed ALL documents (not just traffic laws) with deduplication - Using working pattern"""
 
 import os
 import json
@@ -11,15 +11,14 @@ from sentence_transformers import SentenceTransformer
 import torch
 
 print("=" * 70)
-print("🚗 Embedding Traffic Laws Only")
+print("🚗 Embedding ALL Documents (with deduplication)")
 print("=" * 70)
 
 # Configuration
-URL_PREFIX = "https://thuvienphapluat.vn/van-ban/Giao-thong-Van-tai/"
 COLLECTION_NAME = "traffic_laws_only"
-PROCESSED_FILES_LOG = "processed_traffic_files.txt"
-BACKUP_LOG = "traffic_laws_backup.jsonl"
-EMBEDDING_LOG = "traffic_laws_embedding.log"
+PROCESSED_FILES_LOG = "processed_all_files.txt"
+BACKUP_LOG = "all_documents_backup.jsonl"
+EMBEDDING_LOG = "all_documents_embedding.log"
 
 # Load already processed files
 processed_files = set()
@@ -82,7 +81,7 @@ except:
 
 # Statistics
 total_embedded = 0
-total_traffic_laws = 0
+total_documents = 0
 start_time = time.time()
 
 # GLOBAL deduplication: Track ALL URLs across ALL files
@@ -126,24 +125,27 @@ for idx, folder in enumerate(folders_to_process, 1):
 
         items = data if isinstance(data, list) else [data]
 
-        # Filter for traffic laws and prepare documents
+        # Prepare documents with deduplication (NO URL_PREFIX filter)
         # Use dict to deduplicate by URL (keeps first occurrence)
         url_to_doc = {}
         skipped_duplicates = 0
         for item in items:
             url = item.get("url", "")
 
-            # FILTER: Only traffic law URLs
-            if not url.startswith(URL_PREFIX):
+            # Skip if no URL
+            if not url:
                 continue
 
+            # Normalize URL: Remove anchor fragments (#section) for deduplication
+            url_normalized = url.split("#")[0]
+
             # GLOBAL deduplication: Skip if already embedded in previous files
-            if url in global_seen_urls:
+            if url_normalized in global_seen_urls:
                 skipped_duplicates += 1
                 continue
 
-            # Skip if URL already seen in this file
-            if url in url_to_doc:
+            # Skip if URL already seen in this file (after normalization)
+            if url_normalized in url_to_doc:
                 continue
 
             content = item.get("content", "").strip()
@@ -164,7 +166,7 @@ for idx, folder in enumerate(folders_to_process, 1):
                 text_to_embed = text_to_embed[:8000]
 
             doc = {
-                "url": url,
+                "url": url_normalized,  # Store normalized URL
                 "title": title,
                 "text": text_to_embed,
                 "content_length": len(content),
@@ -172,7 +174,7 @@ for idx, folder in enumerate(folders_to_process, 1):
                 "status": item.get("status", ""),
                 "year": year,  # Store year for ranking
             }
-            url_to_doc[url] = doc
+            url_to_doc[url_normalized] = doc
 
         documents = list(url_to_doc.values())
 
@@ -180,18 +182,18 @@ for idx, folder in enumerate(folders_to_process, 1):
             if skipped_duplicates > 0:
                 print(f"   ⏭️ No new docs ({skipped_duplicates} duplicates skipped)")
             else:
-                print(f"   ⏭️ No traffic law docs in this file")
+                print(f"   ⏭️ No docs in this file")
             # Still mark as processed
             with open(PROCESSED_FILES_LOG, "a", encoding="utf-8") as pf:
                 pf.write(f"{folder}\n")
             with open(EMBEDDING_LOG, "a", encoding="utf-8") as log:
                 log.write(
-                    f"[{datetime.now().strftime('%H:%M:%S')}] SKIPPED: {folder} (no traffic laws)\n"
+                    f"[{datetime.now().strftime('%H:%M:%S')}] SKIPPED: {folder} (no new docs)\n"
                 )
             continue
 
-        print(f"   ✅ Found {len(documents)} traffic law documents")
-        total_traffic_laws += len(documents)
+        print(f"   ✅ Found {len(documents)} new documents")
+        total_documents += len(documents)
 
         # Prepare texts for embedding
         texts = [doc["text"] for doc in documents]
@@ -338,7 +340,7 @@ print(f"\n{'='*70}")
 print(f"✅ COMPLETED!")
 print(f"{'='*70}")
 print(f"📊 Files processed: {idx}/{len(folders_to_process)}")
-print(f"📊 Traffic law documents found: {total_traffic_laws:,}")
+print(f"📊 Documents found: {total_documents:,}")
 print(f"📊 Documents embedded: {total_embedded:,}")
 print(f"⏱️ Total time: {(time.time() - start_time)/3600:.2f} hours")
 
@@ -346,7 +348,7 @@ with open(EMBEDDING_LOG, "a", encoding="utf-8") as log:
     log.write(f"\n{'='*70}\n")
     log.write(f"Completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
     log.write(f"Files processed: {idx}/{len(folders_to_process)}\n")
-    log.write(f"Traffic law documents: {total_traffic_laws:,}\n")
+    log.write(f"Documents found: {total_documents:,}\n")
     log.write(f"Documents embedded: {total_embedded:,}\n")
     log.write(f"Total time: {(time.time() - start_time)/3600:.2f} hours\n")
     log.write(f"{'='*70}\n")
@@ -365,4 +367,4 @@ print(f"\n📁 Files created:")
 print(f"  - {PROCESSED_FILES_LOG}")
 print(f"  - {BACKUP_LOG}")
 print(f"  - {EMBEDDING_LOG}")
-print("\nTest with: python test_traffic_laws.py")
+print("\nTest with: python test_qdrant_search.py")

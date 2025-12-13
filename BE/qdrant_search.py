@@ -30,13 +30,13 @@ def get_embedding_model():
     return embedding_model
 
 
-def search_traffic_laws(query: str, limit: int = 5) -> List[Dict]:
+def search_traffic_laws(query: str, limit: int = 10) -> List[Dict]:
     """
     Search traffic law documents in Qdrant
 
     Args:
         query: User's search query
-        limit: Maximum number of results to return
+        limit: Maximum number of results to return (default: 10)
 
     Returns:
         List of relevant documents with metadata
@@ -56,24 +56,77 @@ def search_traffic_laws(query: str, limit: int = 5) -> List[Dict]:
             limit=limit * 3,  # Get more results to filter duplicates
         ).points
 
-        # Boost newer documents by year (strongly prefer 2024-2025 laws)
+        # Log all raw results from Qdrant
+        logger.info(f"🔍 Qdrant returned {len(search_results)} documents:")
+        for i, result in enumerate(search_results, 1):
+            year = result.payload.get("year", "N/A")
+            title = result.payload.get("title", "").strip() or "[No Title]"
+            url = result.payload.get("url", "")[:80] or "[No URL]"
+            original_score = result.score
+            logger.info(f"  {i}. [Year: {year}] Score: {original_score:.4f}")
+            logger.info(f"      Title: {title[:100]}")
+            logger.info(f"      URL: {url}")
+
+        # Boost newer documents by year (STRONGLY prefer 2024-2025 laws)
         current_year = 2025
         for result in search_results:
             year = result.payload.get("year", 2000)
-            # Strong boost for documents from last 5 years (up to +0.5)
-            year_boost = min(0.5, (year - (current_year - 5)) * 0.1)
-            if year_boost > 0:
-                result.score += year_boost
+
+            # AGGRESSIVE boost for very recent documents (2023-2025)
+            if year >= 2023:
+                year_boost = 1.0  # Massive boost for recent laws
+            elif year >= 2020:
+                year_boost = 0.5  # Medium boost for recent laws
+            elif year >= 2015:
+                year_boost = 0.2  # Small boost
+            else:
+                year_boost = -0.3  # Penalty for old documents
+
+            result.score += year_boost
 
             # Extra boost for penalty/violation related documents (Nghị định)
             title = result.payload.get("title", "")
             if "Nghị định" in title and any(
                 word in title for word in ["xử phạt", "vi phạm", "phạt"]
             ):
-                result.score += 0.2  # Penalty documents get extra boost
+                result.score += 0.3  # Penalty documents get extra boost
 
-        # Re-sort by boosted score
-        search_results = sorted(search_results, key=lambda x: x.score, reverse=True)
+        # 🎯 KEYWORD BOOSTING: Massive boost for exact document number matches
+        import re
+
+        # Extract document numbers from query (e.g., "35/2024", "168/2024")
+        doc_numbers = re.findall(r"\b\d+/\d{4}\b", query)
+
+        for result in search_results:
+            title = result.payload.get("title", "")
+            url = result.payload.get("url", "")
+
+            for doc_num in doc_numbers:
+                # Check if document number appears in title or URL
+                if doc_num in title or doc_num in url:
+                    result.score += 2.0  # HUGE boost for exact document match
+                    logger.info(
+                        f"🎯 Keyword boost +2.0 for doc number '{doc_num}' in: {title[:80]}"
+                    )
+
+        # Re-sort by boosted score AND year (tie-breaker)
+        search_results = sorted(
+            search_results,
+            key=lambda x: (x.score, x.payload.get("year", 0)),
+            reverse=True,
+        )
+
+        # Log after boosting
+        logger.info(
+            f"📊 After year-based boosting (top {min(5, len(search_results))}):"
+        )
+        for i, result in enumerate(search_results[:5], 1):
+            year = result.payload.get("year", "N/A")
+            title = result.payload.get("title", "Untitled")[:100]
+            boosted_score = result.score
+            logger.info(
+                f"  {i}. [Year: {year}] Boosted Score: {boosted_score:.4f} - {title}"
+            )
 
         # Deduplicate results by URL
         seen_urls = set()
@@ -123,12 +176,21 @@ def format_context_for_llm(search_results: List[Dict], max_length: int = 4000) -
     if not search_results:
         return ""
 
+    # Log which documents are being used
+    logger.info("📚 Documents being used as context:")
+    for i, result in enumerate(search_results, 1):
+        year = result.get("year", "N/A")
+        title = result.get("title", "Untitled")[:80]
+        score = result.get("score", 0)
+        logger.info(f"  {i}. [Year: {year}] Score: {score:.4f} - {title}")
+
     context_parts = ["Tài liệu tham khảo từ cơ sở dữ liệu luật giao thông:\n"]
     current_length = len(context_parts[0])
 
     for i, result in enumerate(search_results, 1):
-        # Format each document
-        doc_text = f"\n[Tài liệu {i}] {result['title']}\n"
+        # Format each document with year prominently displayed
+        year = result.get("year", "N/A")
+        doc_text = f"\n[Tài liệu {i} - NĂM {year}] {result['title']}\n"
         doc_text += f"Nguồn: {result['url']}\n"
 
         # Truncate content if needed

@@ -19,6 +19,7 @@ import {
   Plus,
 } from "lucide-react";
 import AvatarBubble from "../components/ui/AvatarBubble";
+import MessageContent from "../components/ui/MessageContent";
 import api from "../lib/api";
 
 export default function ChatPage() {
@@ -219,15 +220,54 @@ export default function ChatPage() {
     try {
       setLoading(true);
 
-      const reply = await api.post("/chat/", {
-        message: trimmed,
-        session_id: currentSessionId
+      // Create placeholder for bot response
+      const botMessageIndex = messages.length + 1;
+      setMessages((prev) => [...prev, { from: "bot", text: "" }]);
+
+      // Handle streaming response
+      const token = localStorage.getItem("access_token");
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+      const response = await fetch(`${API_BASE_URL}/chat/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          message: trimmed,
+          session_id: currentSessionId,
+        }),
       });
 
-      setMessages((prev) => [...prev, { from: "bot", text: reply }]);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Read the streaming response
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        accumulatedText += chunk;
+
+        // Update the bot message with accumulated text
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[botMessageIndex] = { from: "bot", text: accumulatedText };
+          return updated;
+        });
+      }
     } catch (error) {
       console.error("Lỗi khi gọi API:", error);
       alert("Không gọi được backend. Kiểm tra lại server.");
+      // Remove failed bot message
+      setMessages((prev) => prev.filter((_, idx) => idx !== messages.length + 1));
     } finally {
       setLoading(false);
     }
@@ -430,12 +470,16 @@ export default function ChatPage() {
                             </div>
                           )}
                           <div
-                            className={`px-4 py-2 rounded-2xl max-w-[80%] whitespace-pre-wrap text-sm wrap-break-word bubble-pop ${m.from === "user"
-                              ? "bg-[#FF9E8C] text-black rounded-br-none"
+                            className={`px-4 py-2 rounded-2xl max-w-[80%] text-sm wrap-break-word bubble-pop ${m.from === "user"
+                              ? "bg-[#FF9E8C] text-black rounded-br-none whitespace-pre-wrap"
                               : "bg-[#FFF7FB] text-gray-800 rounded-bl-none shadow-[0_2px_5px_-1px_rgba(50,50,93,0.25)] shadow-[0_1px_3px_-1px_rgba(0,0,0,0.3)]"
                               }`}
                           >
-                            {m.text}
+                            {m.from === "user" ? (
+                              m.text
+                            ) : (
+                              <MessageContent content={m.text} />
+                            )}
                           </div>
                         </div>
                       ))}
