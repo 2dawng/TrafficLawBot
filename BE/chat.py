@@ -10,13 +10,13 @@ from db import SessionLocal
 from models import ChatHistory, Session
 from sqlalchemy import select, desc
 
-from groq import Groq  # 🟢 GROQ API
+from groq import Groq
 from qdrant_search import search_traffic_laws, format_context_for_llm
 
 router = APIRouter(prefix="/chat")
 
 JWT_SECRET = os.getenv("JWT_SECRET")
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))  # 🟢 GROQ CLIENT
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 class ChatRequest(BaseModel):
@@ -300,12 +300,13 @@ Chỉ trả về danh sách 10 số thứ tự (VD: 1,5,7,12,15,18,22,25,30,35),
             "\n   - ⚠️ CHỈ liệt kê những văn bản mà bạn ĐÃ THỰC SỰ TRÍCH DẪN/SỬ DỤNG trong câu trả lời"
             "\n   - KHÔNG liệt kê hết 10 tài liệu nếu chỉ dùng 3-4 văn bản"
             "\n   - KIỂM TRA: Đọc lại câu trả lời → Văn bản nào được nhắc đến → CHỈ liệt kê những văn bản đó"
-            "\n   - Format cho TỪNG tài liệu đã dùng: '- [Tài liệu X - NĂM YYYY] [Tên đầy đủ] ([URL])'"
-            "\n   - Ví dụ (nếu chỉ dùng 3 văn bản):"
-            "\n     - [Tài liệu 2 - NĂM 2024] Nghị định 168/2024/NĐ-CP về xử phạt (https://...)"
-            "\n     - [Tài liệu 5 - NĂM 2025] Thông tư 35/2024 về đào tạo lái xe (https://...)"
-            "\n     - [Tài liệu 7 - NĂM 2024] Quy định nâng hạng GPLX (https://...)"
-            "\n   - QUY TRÌNH: Viết xong câu trả lời → Kiểm tra xem đã trích dẫn văn bản nào → Chỉ liệt kê những văn bản đó"
+            "\n   - Format cho TỪNG tài liệu đã dùng: '- [Tài liệu X - NĂM YYYY] [Tên đầy đủ] (URL_THỰC_TẾ_TỪ_TÀI_LIỆU)'"
+            "\n   - ⚠️ QUAN TRỌNG: SỬ DỤNG URL THẬT từ ngữ cảnh tài liệu, KHÔNG dùng placeholder 'https://...' hay 'URL' hay '[URL]'"
+            "\n   - Ví dụ format đúng (với URL thật từ tài liệu):"
+            "\n     - [Tài liệu 2 - NĂM 2024] Nghị định 168/2024/NĐ-CP về xử phạt vi phạm hành chính (https://thuvienphapluat.vn/van-ban/Giao-thong-Van-tai/Nghi-dinh-168-2024-ND-CP-xu-phat-vi-pham-hanh-chinh-giao-thong-duong-bo-618638.aspx)"
+            "\n     - [Tài liệu 5 - NĂM 2024] Thông tư 35/2024/TT-BGTVT quy định đào tạo lái xe (https://thuvienphapluat.vn/van-ban/Giao-thong-Van-tai/Thong-tu-35-2024-TT-BGTVT-dao-tao-sat-hach-cap-giay-phep-lai-xe-618639.aspx)"
+            "\n   - CÁCH LẤY URL: Từ ngữ cảnh tài liệu được cung cấp, tìm trường 'URL:' hoặc 'url:' tương ứng với mỗi [Tài liệu X] và copy CHÍNH XÁC URL đó"
+            "\n   - QUY TRÌNH: Viết xong câu trả lời → Kiểm tra xem đã trích dẫn văn bản nào → Tìm URL thật của văn bản đó trong ngữ cảnh → CHỈ liệt kê những văn bản đó với URL thật"
             "\n✅ Kết thúc bằng câu hỏi mở để hỗ trợ thêm (SAU phần tài liệu tham khảo):"
             "\n   - 'Bạn cần tôi giải thích thêm điều khoản nào không?'"
             "\n   - 'Bạn muốn biết thêm về [chủ đề liên quan] không?'"

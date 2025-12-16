@@ -487,19 +487,19 @@ export default function ChatPage() {
                         <div className="flex justify-start">
                           <div
                             className="
-            px-4 py-2 rounded-2xl max-w-[80%]
-            bg-white text-gray-800
-            animate-fade-up
-          "
+                              px-4 py-2 rounded-2xl max-w-[80%]
+                              bg-white text-gray-800
+                              animate-fade-up
+                            "
                           >
                             <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full relative overflow-hidden">
+                              {/* <div className="w-6 h-6 rounded-full relative overflow-hidden">
                                 <img
                                   className="absolute w-full h-full object-cover"
                                   src="/public/favicon.avif"
                                   alt=""
                                 />
-                              </div>
+                              </div> */}
                               <div className="flex gap-1">
                                 <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" />
                                 <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce [animation-delay:0.15s]" />
@@ -559,7 +559,7 @@ export default function ChatPage() {
                   </div>
 
                   <div className="flex items-center justify-center">
-                    <div className="text-xs mt-2">Chatbot có thể bị lỗi!</div>
+                    <div className="text-xs mt-2">Chatbot có thể đưa ra câu trả lời không chính xác.</div>
                   </div>
                 </div>
               </div>
